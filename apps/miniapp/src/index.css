@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+/* Palette taken from app.txflow.com */
+@theme {
+  --color-bg: #080d00;
+  --color-fill: #0e170f;
+  --color-surface: #1b211b;
+  --color-surface-2: #2b332c;
+  --color-surface-3: #343b33;
+  --color-line: #1c261c;
+  --color-line-2: #3c3d3c;
+
+  --color-primary: #8df885;
+  --color-primary-hover: #6bf055;
+  --color-on-primary: #030503;
+
+  --color-buy: #5fd655;
+  --color-sell: #ff5d5c;
+  --color-warning: #ffd60a;
+  --color-info: #4165fa;
+
+  --color-label: #f2f3fa;
+  --color-label-2: #abafb5;
+  --color-label-3: #98989f;
+  --color-label-4: #6c6d74;
+
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-label);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+input {
+  outline: none;
+}
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.animate-sheet {
+  animation: sheet-up 180ms ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-fade {
+  animation: fade-in 150ms ease-out;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--color-surface-2);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: var(--color-primary);
+  border: 3px solid var(--color-bg);
+}
