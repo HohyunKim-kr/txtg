@@ -1,0 +1,11 @@
+// Cloudflare Workers static-assets deploy for the mini app.
+// Build first (`pnpm run build`), then `npx wrangler deploy` uploads apps/miniapp/dist.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "txgram",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./apps/miniapp/dist",
+    "not_found_handling": "single-page-application"
+  }
+}

@@ -40,7 +40,9 @@ The E2E uses throwaway keys and checks faucet → `approveBuilderFee` (with `sig
 
 1. **BotFather**: create a bot with `/newbot` → `/mybots` → Bot Settings → **Configure Mini App**, register the mini app URL → set the **Menu Button** to the same URL.
 2. **Privy dashboard**: create an app → under Login methods enable **Telegram**, enter the bot token / handle, turn on seamless login → also enable **Wallet** login → add the mini app domain to Allowed domains.
-3. Any static HTTPS host works for the mini app (Cloudflare Pages: build command `pnpm --filter @txgram/miniapp build`, output `apps/miniapp/dist`). Telegram login does not support `.xyz` domains.
+3. Any static HTTPS host works for the mini app. Telegram login does not support `.xyz` domains.
+   - **Cloudflare Workers** (configured in `wrangler.jsonc`): connect the repo, build command `pnpm run build`, deploy command `npx wrangler deploy`. Put the `VITE_*` values under **build variables** — Vite bakes them in at build time.
+   - Cloudflare Pages / any static host: build `pnpm --filter @txgram/miniapp build`, serve `apps/miniapp/dist`.
 
 ## Builder operations
 
