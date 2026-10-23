@@ -7,9 +7,11 @@ import {
   orderAction,
   updateLeverageAction,
   updateMarginModeAction,
+  withdrawAction,
   type Builder,
   type MarginMode,
   type OrderInput,
+  type OrderGrouping,
 } from "./actions";
 import type { Network } from "./config";
 import { exchange } from "./http";
@@ -19,6 +21,8 @@ import { signAgent, signDirect, type AccountSigner } from "./signing";
 export interface DirectOpts {
   /** EIP-712 domain chain for wallets that force their connected chain. */
   signatureChainId?: number;
+  nonce?: number;
+  onSigned?(): void;
 }
 
 export function createTxFlow(network: Network) {
@@ -38,11 +42,19 @@ export function createTxFlow(network: Network) {
       return send(await signDirect(network, signer, action, opts.signatureChainId));
     },
 
+    async withdrawUsdc(signer: AccountSigner, destination: Address, amount: string, opts: DirectOpts = {}) {
+      const chain = opts.signatureChainId ?? network.chainId;
+      const action = withdrawAction(network, destination, amount, chain, opts.nonce);
+      const envelope = await signDirect(network, signer, action, chain);
+      opts.onSigned?.();
+      return send(envelope);
+    },
+
     /** Trading actions, signed by an approved agent key. */
     trader(agent: Pick<LocalAccount, "signTypedData">, builder?: Builder) {
       const sign = <A extends { type: string }>(action: A) => signAgent(network, agent, action, nextNonce());
       return {
-        order: async (orders: OrderInput[]) => send(await sign(orderAction(orders, builder))),
+        order: async (orders: OrderInput[], grouping: OrderGrouping = "na") => send(await sign(orderAction(orders, builder, grouping))),
         cancel: async (cancels: { asset: number; oid: number }[]) => send(await sign(cancelAction(cancels))),
         updateLeverage: async (asset: number, leverage: number, marginMode: MarginMode) =>
           send(await sign(updateLeverageAction(asset, leverage, marginMode))),

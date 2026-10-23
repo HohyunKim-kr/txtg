@@ -75,6 +75,16 @@ const DIRECT_TYPES = {
       { name: "nonce", type: "uint64" },
     ],
   },
+  withdraw3: {
+    Withdraw3: [
+      { name: "txflowNetwork", type: "string" },
+      { name: "destination", type: "address" },
+      { name: "signatureChainId", type: "string" },
+      { name: "tokenAddress", type: "address" },
+      { name: "amount", type: "string" },
+      { name: "nonce", type: "uint64" },
+    ],
+  },
 } as const;
 
 export interface ApproveAgentAction {
@@ -98,7 +108,19 @@ export interface ApproveBuilderFeeAction {
   nonce: number;
 }
 
-export type DirectAction = ApproveAgentAction | ApproveBuilderFeeAction;
+export interface WithdrawAction {
+  type: "withdraw3";
+  txflowNetwork: string;
+  chainId: number;
+  apiVersion: number;
+  destination: Address;
+  signatureChainId: string;
+  tokenAddress: Address;
+  amount: string;
+  nonce: number;
+}
+
+export type DirectAction = ApproveAgentAction | ApproveBuilderFeeAction | WithdrawAction;
 
 export function directTypedData(
   network: Network,
@@ -107,6 +129,11 @@ export function directTypedData(
 ): TypedDataDefinition {
   const { type, ...message } = action;
   const types = DIRECT_TYPES[type];
+  // These wire fields are deliberately absent from Withdraw3's EIP-712 struct.
+  if (type === "withdraw3") {
+    delete (message as Partial<WithdrawAction>).chainId;
+    delete (message as Partial<WithdrawAction>).apiVersion;
+  }
   return {
     domain: domain(network, signatureChainId),
     types,

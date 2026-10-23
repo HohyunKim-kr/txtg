@@ -7,6 +7,8 @@ import {
 } from "@privy-io/react-auth";
 import { useMemo, type ReactNode } from "react";
 import type { Address, Hex } from "viem";
+import { arbitrum, arbitrumSepolia, mainnet } from "viem/chains";
+import { config as appConfig } from "../config";
 import { WalletContext, type WalletState } from "./context";
 
 function chainIdOf(w: ConnectedWallet): number | undefined {
@@ -39,12 +41,12 @@ function Bridge({ children }: { children: ReactNode }) {
               silent: embedded,
               // Sign under the wallet's own chain; TxFlow accepts it via signatureChainId.
               signatureChainId: chainIdOf(wallet),
+              switchChain: (chainId: number) => wallet.switchChain(chainId),
               signer: {
                 address: wallet.address as Address,
                 async signTypedData(td) {
                   const { signature } = await signTypedData(td as never, {
                     address: wallet.address,
-                    ...(embedded ? { uiOptions: { showWalletUIs: false } } : {}),
                   });
                   return signature as Hex;
                 },
@@ -64,6 +66,8 @@ export function PrivyWalletProvider({ appId, children }: { appId: string; childr
     <PrivyProvider
       appId={appId}
       config={{
+        supportedChains: [arbitrum, arbitrumSepolia, mainnet],
+        defaultChain: appConfig.network.name === "mainnet" ? arbitrum : arbitrumSepolia,
         loginMethods: ["telegram", "wallet"],
         appearance: {
           theme: "dark",

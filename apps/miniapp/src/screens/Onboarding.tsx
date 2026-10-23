@@ -43,7 +43,7 @@ function Step({
   );
 }
 
-export function Onboarding({ ob }: { ob: Onboarding }) {
+export function Onboarding({ ob, onDeposit }: { ob: Onboarding; onDeposit(): void }) {
   const { session, logout } = useWallet();
   const toast = useToast();
   const s = ob.state.data!;
@@ -88,7 +88,7 @@ export function Onboarding({ ob }: { ob: Onboarding }) {
           desc={
             config.network.name === "testnet"
               ? "Get free testnet USDC."
-              : "Deposit USDC to this address from the TxFlow app."
+              : "Deposit USDC from your Arbitrum wallet into your trading account."
           }
           action={
             config.network.name === "testnet" ? (
@@ -96,15 +96,7 @@ export function Onboarding({ ob }: { ob: Onboarding }) {
                 Get test USDC
               </Button>
             ) : (
-              <div className="flex items-center gap-2">
-                <code className="num flex-1 truncate rounded-lg bg-bg px-3 py-2 text-xs">{session!.address}</code>
-                <Button variant="surface" className="h-9 px-3 text-sm" onClick={() => navigator.clipboard.writeText(session!.address)}>
-                  Copy
-                </Button>
-                <Button variant="ghost" className="h-9 px-2 text-sm" onClick={() => ob.refresh()}>
-                  Check
-                </Button>
-              </div>
+              <Button className="h-10 w-full" onClick={onDeposit}>Deposit USDC</Button>
             )
           }
         />

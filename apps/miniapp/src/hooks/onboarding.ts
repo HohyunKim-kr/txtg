@@ -27,16 +27,18 @@ export interface OnboardingState {
 
 async function check(user: Address): Promise<OnboardingState> {
   const [geo, elig, agent, agents] = await Promise.all([
-    tx.info.geoCheck().catch(() => ({ geoBlock: false })),
+    tx.info.geoCheck(),
     tx.info.approveAgentEligibility(user),
     loadAgent(user),
     tx.info.approvedAgents(user).catch(() => []),
   ]);
 
-  let builderOk = !config.builder || localStorage.getItem(builderFlag(user)) === "1";
-  if (!builderOk && config.builder) {
-    const fee = await tx.info.maxBuilderFee(user, config.builder.address).catch(() => undefined);
-    builderOk = fee?.status === "ACTIVE" && fee.maxFeeRate >= config.builder.fee;
+  let builderOk = !config.builder;
+  if (config.builder) {
+    const fee = await tx.info.maxBuilderFee(user, config.builder.address);
+    const approvedAt = Number(localStorage.getItem(builderFlag(user)) ?? 0);
+    builderOk = (fee.status === "ACTIVE" && fee.maxFeeRate >= config.builder.fee)
+      || (fee.status === "NONE" && Date.now() - approvedAt < 15_000);
   }
 
   const agentOk = Boolean(
@@ -54,7 +56,7 @@ export function useOnboarding(session: WalletSession | undefined) {
   const user = session?.address;
   const key = ["onboarding", user];
 
-  const state = useQuery({ queryKey: key, queryFn: () => check(user!), enabled: !!user, staleTime: Infinity });
+  const state = useQuery({ queryKey: key, queryFn: () => check(user!), enabled: !!user, staleTime: 15_000, refetchInterval: 30_000 });
   const refresh = () => qc.invalidateQueries({ queryKey: key });
   const opts = { signatureChainId: session?.signatureChainId };
 
@@ -75,7 +77,7 @@ export function useOnboarding(session: WalletSession | undefined) {
       const b = config.builder!;
       await tx.approveBuilderFee(session!.signer, b.address, b.maxFeeRate, opts);
       // maxBuilderFee is indexed and lags the block; remember the approval locally.
-      localStorage.setItem(builderFlag(user!), "1");
+      localStorage.setItem(builderFlag(user!), String(Date.now()));
     },
     onSettled: refresh,
   });

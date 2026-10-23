@@ -12,6 +12,7 @@ export interface WalletSession {
   signatureChainId?: number;
   /** Signs without showing a prompt. */
   silent: boolean;
+  switchChain?(chainId: number): Promise<void>;
 }
 
 export interface WalletState {

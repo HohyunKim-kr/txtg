@@ -1,8 +1,8 @@
 # Architecture
 
-A single Telegram Mini App that does **trading only** on TxFlow. Every order carries a builder code so we earn a fee on the flow.
+A Telegram perpetuals terminal on TxFlow: public markets, trading, portfolio, and native Arbitrum USDC deposits/withdrawals. Orders carry an optional, user-approved builder fee when configured.
 
-- No backend. A static SPA hosted on Cloudflare Pages.
+- No backend. A static SPA hosted on Cloudflare Workers static assets.
 - The bot is just a shell created in BotFather (Main Mini App + menu button). No bot server.
 
 ## 1. Scope
@@ -11,22 +11,25 @@ A single Telegram Mini App that does **trading only** on TxFlow. Every order car
 
 - Login (Privy Telegram seamless login / external wallet)
 - Enable trading (deposit check → `approveBuilderFee` → `approveAgent`)
-- Market / limit orders, cancel
+- Public home/markets, Trade and Portfolio navigation
+- Market / limit orders, GTC / post-only / IOC, reduce-only, cancel
 - Leverage, cross / isolated margin
 - Positions, open orders, balance
-- Order book, current price
+- Order book, current price, real candlestick history
+- Partial/full close, position TP/SL, executions and transfer activity
+- Native Arbitrum USDC permit deposits and account-signed withdrawals
 
 **Later**
 
 - Outcome (prediction market) trading
-- Deposit / withdraw UI (the MVP deposits via the official app or the faucet)
-- TP/SL, TWAP
+- Other chains via TxRelay, direct ERC-20 transfer fallback
+- TWAP
 - Bot command trading, alerts, analytics, explorer
 
 ## 2. TxFlow basics
 
 - Account = EVM address. No API keys. Reads are unauthenticated; writes are signed locally.
-- **Account key** (user's wallet): `approveBuilderFee`, `approveAgent` — direct EIP-712.
+- **Account key** (user's wallet): `approveBuilderFee`, `approveAgent`, `withdraw3`, USDC permits — direct EIP-712.
 - **Agent key**: `order`, `cancel`, `updateLeverage`, `updateMarginMode` — MessagePack + `Agent` signing. Cannot withdraw or transfer.
 - Setup order is fixed: **deposit → `approveBuilderFee` → `approveAgent`**.
 - The API sends CORS `*`, so the browser calls it directly (verified on testnet, 2026-10-23).
@@ -37,7 +40,7 @@ A single Telegram Mini App that does **trading only** on TxFlow. Every order car
 ```
  Telegram client
  ┌──────────────────────────────────────────────┐
- │  Mini App (Cloudflare Pages)                 │
+ │  Mini App (Cloudflare Workers)                 │
  │                                              │      ┌──────────────┐
  │  ┌──────────────────────────────────────┐    │◄────►│ Privy        │
  │  │ Privy SDK (embedded + external)      │    │      └──────────────┘
@@ -56,7 +59,7 @@ A single Telegram Mini App that does **trading only** on TxFlow. Every order car
 
 | Path | For | How |
 |---|---|---|
-| **A. Privy embedded wallet** (default) | New users | Telegram seamless login → wallet created automatically, no signing prompts |
+| **A. Privy embedded wallet** (default) | New users | Telegram seamless login → wallet created automatically; account/fund signatures use wallet UI |
 | **B. External wallet** | Users already on TxFlow with their own wallet | Privy wallet login (WalletConnect under the hood) → MetaMask / Rabby etc. |
 | Dev wallet | Local development, E2E | Used when `VITE_PRIVY_APP_ID` is empty; testnet only; key kept in localStorage |
 
@@ -68,7 +71,8 @@ interface WalletSession {
   kind: "embedded" | "external" | "dev";
   signer: AccountSigner;          // signTypedData(td) → Hex
   signatureChainId?: number;      // the wallet's current chain
-  silent: boolean;                // signs without a prompt (embedded, dev)
+  silent: boolean;                // supports a single combined setup action
+  switchChain?(chainId: number): Promise<void>;
 }
 ```
 
@@ -86,7 +90,8 @@ interface WalletSession {
 
 ```
 Open the mini app
- → Login (Privy seamless / external wallet)
+ → Public Home (markets) / Portfolio navigation
+ → Trade → Login (Privy seamless / external wallet)
  → geoCheck                              stop if the region is restricted
  → approveAgentEligibility               activated by a first deposit?
  → Deposit prompt (testnet: POST /request-fund)
@@ -96,8 +101,8 @@ Open the mini app
  → Trade screen
 ```
 
-- Embedded and dev wallets sign steps 2 and 3 back to back from a single "Start trading" tap, with no prompts.
-- `maxBuilderFee` is indexed and returns `NONE` for a few seconds after approval → on a successful approval we record it locally and trust that.
+- Embedded and dev wallets can start setup from one tap; Privy account-key signatures remain visible.
+- `maxBuilderFee` is indexed. A local timestamp grants a 15-second indexing grace period only for `NONE`; live `REVOKED` is never overridden. Setup is rechecked periodically.
 - `/account-status` (`accountStatus`, `accessCodeStatus`) returned 404 on testnet (2026-10-23) → not used; `approveAgentEligibility` instead.
 
 **APIs used by the trade screen**
@@ -109,9 +114,9 @@ Open the mini app
 | Ticker bar (mark, oracle, funding, 24h) | `activeAssetCtx` | `activeAssetCtx` | — |
 | Leverage / margin | `activeAssetData` | — | `updateLeverage`, `updateMarginMode` |
 | Positions / balance | `clearinghouseState` | `clearinghouseState` | `order` (reduce-only market close) |
-| Open orders | `frontendOpenOrders` | `orderUpdates` → refetch | `cancel` |
+| Open orders | `frontendOpenOrders` + `tpslOrders` | `orderUpdates` → refetch | `cancel` |
 
-- Market orders use `tif: "FrontendMarket"` priced at mid ±1%.
+- Market orders use `FrontendMarket` with selected slippage from the opposing book. Close fetches a fresh book/position and reconciles the remaining size before reporting success.
 - Response quirks: `returnOnEquity` is already in percent; `activeAssetData.maxTradeSzs` / `markPx` return bogus values on testnet, so they are not used.
 
 ## 7. Repository layout (pnpm workspaces)
@@ -128,7 +133,10 @@ packages/
     info.ts       Read types and client
     ws.ts         /ws — 10 s ping, re-subscribe on reconnect
     format.ts     priceTick / szDecimals rounding
-    client.ts     createTxFlow(): approval actions + trader(agent)
+    client.ts     createTxFlow(): approvals, account-signed withdraw, trader(agent)
+    trading.ts    Fresh-price close and position reconciliation
+    funds.ts      Arbitrum bridge/token reads, EIP-2612 permit, receipt validation
+    relay.ts      Environment-scoped TxRelay USDC collateral routes and deposit-address issuance
   scripts/        e2e-testnet.ts, builder.ts (status / claim)
 ```
 
@@ -153,3 +161,22 @@ Design tokens are taken from app.txflow.com's CSS: background `#080d00`, accent 
 | Testnet `claimBuilderRewards` returns "This interface is currently disabled." | TxFlow |
 | Fallback storage policy for clients without `SecureStorage` | Internal |
 | Mini app domain (Telegram login doesn't support `.xyz`) | Internal |
+
+## Funds verification and known external constraints
+
+`withdraw3` signs `Withdraw3(string txflowNetwork,address destination,string signatureChainId,address tokenAddress,string amount,uint64 nonce)`. Wire `chainId`/`apiVersion` are not in that struct. The action signatureChainId is hex text; the envelope override is numeric.
+
+Testnet currently treats withdrawal amount as gross: a request of 2 reserves 2, with a ledger net amount of 1 plus fee 1. This differs from the docs' fee prose. Verify mainnet semantics before a real-funds release. A pending ledger row is not destination-chain settlement.
+
+Permit deposits verify the token DOMAIN_SEPARATOR before signing and require a matching ERC-20 Transfer in a successful receipt, because Bridge2 can mine FailedPermitDeposit without reverting. Ledger credit is separate. Read-only mainnet and testnet bridge/token/domain checks passed; an actual ERC-20 deposit with funded Arbitrum wallet and final withdrawal settlement remain release checks.
+
+
+## Dashboard, charts and address deposits
+
+Home renders account balance first, then the four highest-volume active perp markets, then a searchable/filterable list. `webData2` supplies initial 24h statistics and `allAssetCtxs` supplies live updates. Spot instrument IDs are excluded by matching the perp metadata. Mid prices come from `allMids`; missing daily statistics stay unavailable rather than becoming zero.
+
+PriceChart uses TradingView Lightweight Charts with up to 500 real candles. Drag/pinch/wheel navigation, keyboard arrows and zoom, reset, and expanded height are supported. Updates preserve the visible time range when the user is browsing older candles. The chart includes the required attribution. Token logos are local files with a source manifest and licenses; unknown assets use their symbol initials.
+
+DepositPanel defaults to the test faucet on testnet and Crypto transfer on mainnet. Its environment-scoped TxRelay networks query accepts only enabled USDC routes whose destination is the protocol USDC collateral address. It sends the wire token symbol and the user's TxFlow address to deposit-address. The QR only appears after a valid address (and memo where required) is returned. Minimum, maximum, fee and ETA come from that route; only the selected network is shown. Connected-wallet permit deposits remain available in a separate tab.
+
+Mainnet network discovery and Solana/Arbitrum address issuance were verified without sending funds. Testnet relay access currently fails with 403/CORS; this never falls back to mainnet. Funded TxRelay deposit credit and final withdrawal settlement remain release checks.

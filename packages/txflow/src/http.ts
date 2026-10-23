@@ -11,6 +11,14 @@ export class TxFlowError extends Error {
   }
 }
 
+/** Accepted but not yet confirmed. Do not blindly submit the action again. */
+export class PendingExchangeError extends TxFlowError {
+  constructor(readonly txHash?: string) {
+    super("Transaction pending. Check account activity before submitting again.");
+    this.name = "PendingExchangeError";
+  }
+}
+
 async function post(network: Network, path: string, body: unknown): Promise<unknown> {
   const res = await fetch(network.httpUrl + path, {
     method: "POST",
@@ -61,16 +69,18 @@ export async function exchange(
   const body = opts.confirm ? { ...envelope, confirm: "executed" } : envelope;
   const res = (await post(network, "/exchange", body)) as
     | ExchangeOk
-    | { status: "err" | "pending"; code?: number; message?: string; response?: string }
+    | { status: "err" | "pending"; code?: number; message?: string; response?: string; txHash?: string }
     | undefined;
   if (!res) throw new TxFlowError("empty exchange response");
+  if (res.status === "pending") throw new PendingExchangeError(res.txHash);
   if (res.status !== "ok") {
     const r = res as { message?: string; response?: string; code?: number };
     throw new TxFlowError(r.message ?? r.response ?? `exchange ${res.status}`, r.code, res);
   }
-  const status = res.data?.data.statuses[0];
-  if (status && typeof status === "object" && "error" in status) {
-    throw new TxFlowError(status.error, undefined, res);
+  for (const status of res.data?.data.statuses ?? []) {
+    if (status && typeof status === "object" && "error" in status) {
+      throw new TxFlowError(status.error, undefined, res);
+    }
   }
   return res;
 }

@@ -6,10 +6,12 @@
 import {
   NETWORKS,
   createTxFlow,
+  closePosition,
   marketPrice,
   requestFund,
   roundPrice,
   roundSize,
+  nextNonce,
   type AccountSigner,
 } from "@txgram/txflow";
 import type { Address } from "viem";
@@ -108,27 +110,48 @@ const pos = await waitFor("position", async () => {
 });
 log("position", pos.szi, "@", pos.entryPx, "lev", JSON.stringify(pos.leverage));
 
-log(
-  "close",
-  JSON.stringify(
-    await trader.order([
-      {
-        asset: btc.index,
-        isBuy: false,
-        price: marketPrice(mid, false, btc.priceTick),
-        size: pos.szi,
-        reduceOnly: true,
-        tif: "FrontendMarket",
-        marginMode: "cross",
-      },
-    ]),
-  ),
-);
+const partial = await closePosition(tx, main.address, trader, btc, pos, 0.5);
+if (partial.status !== "reduced") throw new Error("partial close did not reduce the position");
+log("partial close verified", JSON.stringify(partial));
+const closed = await closePosition(tx, main.address, trader, btc, pos);
+if (closed.status !== "closed") throw new Error("full close did not flatten the position");
+log("close verified", JSON.stringify(closed));
+
+// Repeat in the other direction. Close price comes from the current opposing book.
+const shortBook = await tx.info.l2Book(btc.index);
+await trader.order([{ asset: btc.index, isBuy: false, price: marketPrice(Number(shortBook.levels[0][0]!.px), false, btc.priceTick), size, tif: "FrontendMarket", marginMode: "cross" }]);
+const short = await waitFor("short", async () => (await tx.info.clearinghouseState(main.address)).assetPositions.find((p) => Number(p.position.asset) === btc.index && Number(p.position.szi) < 0)?.position);
+log("short opened", short.szi);
+const protectedOrders = (["tp", "sl"] as const).map((kind) => {
+  const px = roundPrice(mid * (kind === "tp" ? 0.95 : 1.05), btc.priceTick);
+  return { asset: btc.index, isBuy: true, price: marketPrice(Number(px), true, btc.priceTick), size, reduceOnly: true, tif: "FrontendMarket" as const, marginMode: "cross" as const, trigger: { isMarket: true, triggerPx: px, tpsl: kind } };
+});
+log("TP/SL", JSON.stringify(await trader.order(protectedOrders, "positionTpsl")));
+const protection = await waitFor("TP/SL open orders", async () => {
+  const rows = (await tx.info.openOrders(main.address)).filter((o) => o.asset === btc.index && o.reduceOnly);
+  return rows.length >= 2 ? rows : undefined;
+});
+log("TP/SL cancel", JSON.stringify(await trader.cancel(protection.map((o) => ({ asset: Number(o.asset), oid: o.oid })))));
+const shortClose = await closePosition(tx, main.address, trader, btc, short);
+if (shortClose.status !== "closed") throw new Error("short close failed");
+log("short close verified", JSON.stringify(shortClose));
+
 await waitFor("flat", async () => {
   const s = await tx.info.clearinghouseState(main.address);
   return s.assetPositions.some((p) => Number(p.position.asset) === btc.index) ? undefined : true;
 });
 log("flat");
+
+// A separate isolated position verifies margin-mode routing and its close key.
+log("isolated mode", JSON.stringify(await trader.updateMarginMode(btc.index, false)));
+log("isolated leverage", JSON.stringify(await trader.updateLeverage(btc.index, 5, "isolated")));
+const isolatedBook = await tx.info.l2Book(btc.index);
+await trader.order([{ asset: btc.index, isBuy: true, price: marketPrice(Number(isolatedBook.levels[1][0]!.px), true, btc.priceTick), size, tif: "FrontendMarket", marginMode: "isolated" }]);
+const isolated = await waitFor("isolated position", async () => (await tx.info.clearinghouseState(main.address)).assetPositions.find((p) => p.position.leverage.type.toLowerCase() === "isolated")?.position);
+if (isolated.leverage.value !== 5) throw new Error("isolated leverage was not applied");
+const isolatedClose = await closePosition(tx, main.address, trader, btc, isolated);
+if (isolatedClose.status !== "closed") throw new Error("isolated close failed");
+log("isolated close verified", JSON.stringify(isolatedClose));
 
 await sleep(3000);
 const bs = await tx.info.builderState(builder.address);
@@ -145,4 +168,21 @@ try {
   log("claim skipped:", (e as Error).message);
 }
 log("builderState", JSON.stringify(await tx.info.builderState(builder.address)));
+const beforeWithdraw = await tx.info.clearinghouseState(main.address);
+try {
+  const nonce = nextNonce();
+  log("withdraw3", JSON.stringify(await tx.withdrawUsdc(main, main.address, "2", { signatureChainId: 421614, nonce })));
+  await waitFor("withdrawal reserved/debited", async () => {
+    const after = await tx.info.clearinghouseState(main.address);
+    return Number(beforeWithdraw.withdrawable) - Number(after.withdrawable) >= 1.99 ? after : undefined;
+  });
+  const row = await waitFor("withdrawal ledger", async () => (await tx.info.ledger(main.address)).data.find((r) => r.delta.type === "withdraw" && Number(r.delta.nonce) === nonce));
+  if (Number(row.delta.amount) + Number(row.delta.fee) !== 2) throw new Error("withdrawal ledger fee/amount mismatch");
+  log("withdrawal ledger", JSON.stringify(row.delta));
+  log("withdrawal accepted and collateral reserved/debited; destination-chain settlement is separate");
+} catch (e) {
+  // Record a gateway restriction separately; never report this as a successful withdrawal.
+  if ((e as Error).message.includes("interface is currently disabled")) log("withdrawal blocked by testnet gateway:", (e as Error).message);
+  else throw e;
+}
 log("OK");
