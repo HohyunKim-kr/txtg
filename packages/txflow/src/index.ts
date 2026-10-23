@@ -6,3 +6,6 @@ export * from "./info";
 export * from "./format";
 export * from "./ws";
 export * from "./client";
+export * from "./trading";
+export * from "./funds";
+export * from "./relay";
