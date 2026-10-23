@@ -11,28 +11,42 @@ const keys = {
   orders: (user: Address) => ["openOrders", user],
 };
 
-export function useAccountState(user: Address) {
+export function useAccountState(user?: Address) {
   const qc = useQueryClient();
   useEffect(
-    () =>
-      socket.subscribe({ type: "clearinghouseState", user }, (d) => {
+    () => {
+      if (!user) return;
+      return socket.subscribe({ type: "clearinghouseState", user }, (d) => {
         const s = d as AccountState & { user: string };
         if (s.user?.toLowerCase() === user.toLowerCase()) qc.setQueryData(keys.account(user), s);
-      }),
+      });
+    },
     [qc, user],
   );
-  return useQuery<AccountState>({ queryKey: keys.account(user), queryFn: () => tx.info.clearinghouseState(user) });
+  return useQuery<AccountState>({ queryKey: ["clearinghouse", user], queryFn: () => tx.info.clearinghouseState(user!), enabled: !!user, refetchInterval: 15_000 });
 }
 
-export function useOpenOrders(user: Address) {
+export function useOpenOrders(user?: Address) {
   const qc = useQueryClient();
   useEffect(
-    () =>
+    () => user ?
       // The stream tells us something changed; the snapshot is the source of truth.
-      socket.subscribe({ type: "orderUpdates", user }, () => qc.invalidateQueries({ queryKey: keys.orders(user) })),
+      socket.subscribe({ type: "orderUpdates", user }, () => {
+        void qc.invalidateQueries({ queryKey: keys.orders(user) });
+        void qc.invalidateQueries({ queryKey: keys.account(user) });
+        void qc.invalidateQueries({ queryKey: ["fills", user] });
+      }) : undefined,
     [qc, user],
   );
-  return useQuery<OpenOrder[]>({ queryKey: keys.orders(user), queryFn: () => tx.info.frontendOpenOrders(user) });
+  return useQuery<OpenOrder[]>({ queryKey: ["openOrders", user], queryFn: () => tx.info.openOrders(user!), enabled: !!user, refetchInterval: 15_000 });
+}
+
+export function useFills(user?: Address) {
+  return useQuery({ queryKey: ["fills", user], queryFn: () => tx.info.userFills(user!), enabled: !!user, refetchInterval: 15_000 });
+}
+
+export function useLedger(user?: Address) {
+  return useQuery({ queryKey: ["ledger", user], queryFn: () => tx.info.ledger(user!), enabled: !!user, refetchInterval: 10_000 });
 }
 
 export function useLeverage(user: Address, market: PerpMarket | undefined) {

@@ -7,6 +7,7 @@ import { MarketBar } from "../components/MarketBar";
 import { OrderBook } from "../components/OrderBook";
 import { OrderTicket } from "../components/OrderTicket";
 import { Spinner } from "../components/ui";
+import { PriceChart } from "../components/PriceChart";
 import { config } from "../config";
 import { useAccountState, useLeverage, useOpenOrders } from "../hooks/account";
 import { useAssetCtx, useBook, useMarkets, useMids } from "../hooks/market";
@@ -15,10 +16,10 @@ import type { WalletSession } from "../wallet/context";
 
 const LAST_MARKET = "txgram:market";
 
-export function Trade({ session, agent }: { session: WalletSession; agent: LocalAccount }) {
+export function Trade({ session, agent, initialMarket, onDeposit, onWithdraw }: { session: WalletSession; agent: LocalAccount; initialMarket?: number; onDeposit(): void; onWithdraw(): void }) {
   const markets = useMarkets();
   const mids = useMids();
-  const [index, setIndex] = useState(() => Number(localStorage.getItem(LAST_MARKET) ?? 1));
+  const [index, setIndex] = useState(() => initialMarket ?? Number(localStorage.getItem(LAST_MARKET) ?? 1));
   const market = useMemo(
     () => markets.data?.find((m) => m.index === index) ?? markets.data?.[0],
     [markets.data, index],
@@ -39,7 +40,7 @@ export function Trade({ session, agent }: { session: WalletSession; agent: Local
   if (!market) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Spinner className="size-6 text-primary" />
+        {markets.isError ? <button className="text-sm text-sell" onClick={() => markets.refetch()}>Markets unavailable · Retry</button> : <Spinner className="size-6 text-primary" />}
       </div>
     );
   }
@@ -49,9 +50,11 @@ export function Trade({ session, agent }: { session: WalletSession; agent: Local
 
   return (
     <div className="min-h-full pb-[env(safe-area-inset-bottom)]">
-      <Header account={account.data} />
+      <Header account={account.data} onDeposit={onDeposit} onWithdraw={onWithdraw} />
       <MarketBar market={market} ctx={ctx} markets={markets.data ?? []} mids={mids} onSelect={select} />
-      <div className="grid grid-cols-[1fr_1.15fr] gap-3 px-2 pt-3 pb-4">
+      {account.isError && <p role="alert" className="px-4 py-2 text-xs text-sell">Account data unavailable. <button className="underline" onClick={() => account.refetch()}>Retry</button></p>}
+      <PriceChart market={market} />
+      <div className="grid grid-cols-[1fr_1.15fr] gap-3 px-2 pt-3 pb-4 lg:gap-6 lg:px-6">
         <OrderBook market={market} book={book} onPick={(px) => setPicked({ px, at: Date.now() })} />
         <div className="pr-2">
           <OrderTicket

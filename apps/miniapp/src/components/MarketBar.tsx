@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import type { MarketCtx } from "../hooks/market";
 import { fmtCompact, fmtPct, fmtPx } from "../lib/format";
 import { Sheet } from "./ui";
+import { TokenIcon } from "./TokenIcon";
 
 const base = (m: PerpMarket) => m.baseCurrency;
 
@@ -28,6 +29,7 @@ export function MarketBar({
     <>
       <div className="flex items-center justify-between px-4 pt-1 pb-3">
         <button onClick={() => setOpen(true)} className="flex items-center gap-2 text-left">
+          <TokenIcon symbol={market.baseCurrency} className="size-7" />
           <span className="text-xl font-bold">{base(market)}</span>
           <span className="text-sm text-label-4">-USDC</span>
           <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[11px] font-semibold text-primary">
@@ -109,6 +111,7 @@ function MarketSheet({
             className="flex w-full items-center justify-between px-4 py-3 active:bg-surface"
           >
             <span className="flex items-center gap-2">
+              <TokenIcon symbol={m.baseCurrency} className="size-8" />
               <span className="font-semibold">{base(m)}</span>
               <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-label-3">{m.maxLeverage}x</span>
             </span>

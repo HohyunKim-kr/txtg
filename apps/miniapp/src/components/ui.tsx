@@ -3,6 +3,9 @@ import {
   useCallback,
   useContext,
   useState,
+  useEffect,
+  useRef,
+  useId,
   type ButtonHTMLAttributes,
   type ReactNode,
 } from "react";
@@ -82,14 +85,37 @@ export function Segmented<T extends string>({
 }
 
 export function Sheet({ open, onClose, title, children }: { open: boolean; onClose(): void; title: string; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const panel = ref.current;
+    const scroll = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    panel?.focus();
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeRef.current();
+      if (e.key !== "Tab") return;
+      const items = Array.from(panel?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href], [tabindex="0"]') ?? []);
+      if (!items.length) { e.preventDefault(); return; }
+      const first = items[0]!; const last = items.at(-1)!;
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === panel)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (document.activeElement === last || document.activeElement === panel)) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", key);
+    return () => { document.body.style.overflow = scroll; document.removeEventListener("keydown", key); previous?.focus(); };
+  }, [open]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-40 flex flex-col justify-end">
       <div className="animate-fade absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="animate-sheet relative max-h-[85vh] overflow-hidden rounded-t-2xl border-t border-line-2 bg-fill pb-[env(safe-area-inset-bottom)]">
+      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="animate-sheet relative mx-auto max-h-[85vh] w-full max-w-xl overflow-hidden rounded-t-2xl border-t border-line-2 bg-fill pb-[env(safe-area-inset-bottom)] outline-none">
         <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-surface-3" />
         <div className="flex items-center justify-between px-4 pt-3 pb-2">
-          <h2 className="text-base font-semibold">{title}</h2>
+          <h2 id={titleId} className="text-base font-semibold">{title}</h2>
           <button onClick={onClose} className="text-label-3 active:text-label" aria-label="Close">
             ✕
           </button>

@@ -8,8 +8,8 @@ import { Button, Sheet, useToast } from "./ui";
 
 const KIND_LABEL = { embedded: "Telegram wallet", external: "External wallet", dev: "Dev wallet" } as const;
 
-export function Header({ account }: { account: AccountState | undefined }) {
-  const { session, logout } = useWallet();
+export function Header({ account, onDeposit, onWithdraw }: { account: AccountState | undefined; onDeposit?(): void; onWithdraw?(): void }) {
+  const { session, logout, login, ready } = useWallet();
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const value = account?.marginSummary.accountValue;
@@ -25,10 +25,10 @@ export function Header({ account }: { account: AccountState | undefined }) {
             <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold text-warning">TESTNET</span>
           )}
         </div>
-        <button onClick={() => setOpen(true)} className="flex flex-col items-end rounded-lg px-2 py-1 active:bg-surface">
+        {session ? <button onClick={() => setOpen(true)} className="flex flex-col items-end rounded-lg px-2 py-1 active:bg-surface">
           <span className="num text-sm font-semibold">${fmtUsd(value)}</span>
           <span className="text-[10px] text-label-4">{session && shortAddr(session.address)}</span>
-        </button>
+        </button> : <Button className="h-9 px-4 text-xs" onClick={login} disabled={!ready}>Connect wallet</Button>}
       </header>
 
       <Sheet open={open} onClose={() => setOpen(false)} title="Account">
@@ -47,6 +47,7 @@ export function Header({ account }: { account: AccountState | undefined }) {
               </div>
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-3"><Button className="h-11" onClick={() => { setOpen(false); onDeposit?.(); }} disabled={!onDeposit}>Deposit</Button><Button variant="surface" className="h-11" onClick={() => { setOpen(false); onWithdraw?.(); }} disabled={!onWithdraw}>Withdraw</Button></div>
           <div className="rounded-xl bg-surface p-4">
             <div className="flex items-center justify-between text-xs text-label-4">
               <span>{session && KIND_LABEL[session.kind]}</span>
@@ -64,9 +65,7 @@ export function Header({ account }: { account: AccountState | undefined }) {
               Copy address
             </Button>
           </div>
-          <p className="text-xs text-label-4">
-            Deposit and withdraw with the same address in the TxFlow app (app.txflow.com). The trading key on this device cannot withdraw.
-          </p>
+          <p className="text-xs text-label-4">Funds belong to your wallet. Withdrawals require your wallet signature; the trading key cannot withdraw.</p>
           <Button variant="ghost" className="h-10 w-full text-sm text-sell" onClick={() => logout()}>
             Log out
           </Button>

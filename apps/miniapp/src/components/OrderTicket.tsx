@@ -1,5 +1,6 @@
 import { decimalsOf, marketPrice, roundPrice, roundSize, type L2Book, type PerpMarket, type Trader } from "@txgram/txflow";
 import { useEffect, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { config } from "../config";
 import { errorMessage, fmtUsd } from "../lib/format";
 import { LeverageSheet } from "./LeverageSheet";
@@ -24,12 +25,16 @@ export function OrderTicket({
   pickedPrice?: { px: string; at: number };
 }) {
   const toast = useToast();
+  const qc = useQueryClient();
   const [side, setSide] = useState<Side>("buy");
   const [kind, setKind] = useState<Kind>("market");
   const [price, setPrice] = useState("");
   const [usd, setUsd] = useState("");
   const [busy, setBusy] = useState(false);
   const [levOpen, setLevOpen] = useState(false);
+  const [reduceOnly, setReduceOnly] = useState(false);
+  const [tif, setTif] = useState<"Gtc" | "Alo" | "Ioc">("Gtc");
+  const [slippage, setSlippage] = useState("1");
 
   const isBuy = side === "buy";
   const lev = leverage?.value ?? 1;
@@ -52,15 +57,22 @@ export function OrderTicket({
 
   const refPx = kind === "limit" ? Number(price) : isBuy ? bestAsk : bestBid;
   const size = refPx > 0 && Number(usd) > 0 ? roundSize(Number(usd) / refPx, market.szDecimals) : "";
-  const maxUsd = available * lev;
+  const maxUsd = available * lev * 0.995;
   const margin = Number(usd) / lev;
 
   const setPct = (pct: number) => setUsd(maxUsd > 0 ? String(Math.floor(maxUsd * pct * 100) / 100) : "");
 
   const submit = async () => {
+    if (busy) return;
+    if (market.haltTrading || market.delisted) return toast("error", "This market is not accepting orders");
+    if (!leverage) return toast("error", "Loading account leverage. Try again shortly.");
+    if (!Number.isFinite(Number(usd)) || Number(usd) <= 0) return toast("error", "Enter a valid order value");
+    if (!reduceOnly && Number(usd) > maxUsd) return toast("error", "Order exceeds available margin (including a fee buffer)");
     if (!size || Number(size) <= 0) return toast("error", "Order size is too small");
     if (kind === "limit" && !(Number(price) > 0)) return toast("error", "Enter a price");
     if (kind === "market" && !Number.isFinite(mid)) return toast("error", "Loading the order book");
+    const sizeCap = kind === "market" ? market.maxMarketOrderSize : market.maxLimitOrderSize;
+    if (Number(size) > sizeCap) return toast("error", `Maximum order size is ${sizeCap} ${market.baseCurrency}`);
     setBusy(true);
     try {
       await trader.order([
@@ -69,10 +81,11 @@ export function OrderTicket({
           isBuy,
           price:
             kind === "market"
-              ? marketPrice(mid, isBuy, market.priceTick)
+              ? marketPrice(refPx, isBuy, market.priceTick, Number(slippage) / 100)
               : roundPrice(price, market.priceTick, isBuy ? "down" : "up"),
           size,
-          tif: kind === "market" ? "FrontendMarket" : "Gtc",
+          tif: kind === "market" ? "FrontendMarket" : tif,
+          reduceOnly,
           marginMode: leverage?.mode ?? "cross",
         },
       ]);
@@ -81,6 +94,7 @@ export function OrderTicket({
     } catch (e) {
       toast("error", errorMessage(e));
     } finally {
+      for (const key of ["clearinghouse", "openOrders", "fills"]) void qc.invalidateQueries({ queryKey: [key] });
       setBusy(false);
     }
   };
@@ -97,6 +111,7 @@ export function OrderTicket({
       />
       <div className="flex gap-2">
         <button
+          disabled={!leverage}
           onClick={() => setLevOpen(true)}
           className="flex h-8 flex-1 items-center justify-center gap-1 rounded-lg bg-surface text-xs font-semibold"
         >
@@ -130,6 +145,10 @@ export function OrderTicket({
           }
         />
       )}
+      <div className="flex items-center justify-between gap-2 text-[11px] text-label-3">
+        <label className="flex items-center gap-1.5"><input type="checkbox" checked={reduceOnly} onChange={(e) => setReduceOnly(e.target.checked)} className="accent-primary" /> Reduce only</label>
+        {kind === "limit" ? <select aria-label="Time in force" className="rounded bg-surface p-1.5 text-label-2" value={tif} onChange={(e) => setTif(e.target.value as typeof tif)}><option value="Gtc">GTC</option><option value="Alo">Post only</option><option value="Ioc">IOC</option></select> : <label className="flex items-center gap-1">Slippage<select aria-label="Slippage" className="rounded bg-surface p-1.5 text-label-2" value={slippage} onChange={(e) => setSlippage(e.target.value)}>{["0.1", "0.5", "1"].map((s) => <option key={s} value={s}>{s}%</option>)}</select></label>}
+      </div>
       <Field label="Order value" unit="USDC" value={usd} onChange={setUsd} placeholder="0" />
 
       <div className="grid grid-cols-4 gap-1.5">
@@ -146,7 +165,7 @@ export function OrderTicket({
         <Row label="Available" value={`${fmtUsd(available)} USDC`} />
       </div>
 
-      <Button variant={isBuy ? "buy" : "sell"} className="h-11 w-full" loading={busy} onClick={submit}>
+      <Button variant={isBuy ? "buy" : "sell"} className="h-11 w-full" disabled={!leverage || market.haltTrading} loading={busy} onClick={submit}>
         {isBuy ? "Buy / Long" : "Sell / Short"}
       </Button>
       {config.builder && (
