@@ -1,0 +1,4 @@
+# Server secrets only. Copy to .dev.vars for local Worker development.
+# Never use VITE_ prefixes or commit real values.
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_WEBHOOK_SECRET=

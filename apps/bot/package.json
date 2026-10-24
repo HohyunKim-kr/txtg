@@ -1,0 +1,14 @@
+{
+  "name": "@txgram/bot",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p .",
+    "typecheck": "tsc -p .",
+    "test": "vitest run",
+    "banners": "node banners/render.mjs"
+  },
+  "dependencies": { "@txgram/txflow": "workspace:*" },
+  "devDependencies": { "typescript": "^7.0.2", "vitest": "^5.0.5" }
+}

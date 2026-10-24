@@ -6,7 +6,8 @@
   "scripts": {
     "e2e": "tsx src/e2e-testnet.ts",
     "builder": "tsx src/builder.ts",
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p .",
+    "bot:setup": "tsx src/telegram-setup.ts"
   },
   "dependencies": {
     "@txgram/txflow": "workspace:*",

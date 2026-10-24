@@ -6,6 +6,7 @@ import { Button, Spinner } from "./components/ui";
 import { useOnboarding } from "./hooks/onboarding";
 import { errorMessage } from "./lib/format";
 import { tx } from "./lib/txflow";
+import { parseLaunch } from "./lib/launch";
 import { config } from "./config";
 import { Home } from "./screens/Home";
 import { Login } from "./screens/Login";
@@ -22,8 +23,9 @@ type View = "home" | "trade" | "portfolio";
 export function App() {
   const wallet = useWallet();
   const ob = useOnboarding(wallet.session);
-  const [view, setView] = useState<View>("home");
-  const [selected, setSelected] = useState<number>();
+  const [launch] = useState(() => parseLaunch(location.search));
+  const [view, setView] = useState<View>(launch.view);
+  const [selected, setSelected] = useState<number | undefined>(launch.asset);
   const [funds, setFunds] = useState<FundsMode | null>(null);
   const trader = useMemo(() => ob.state.data?.agent && ob.state.data.agentOk
     ? tx.trader(ob.state.data.agent, config.builder) : undefined, [ob.state.data?.agent, ob.state.data?.agentOk]);
