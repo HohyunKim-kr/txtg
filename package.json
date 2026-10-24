@@ -7,6 +7,15 @@
     "dev": "pnpm --filter @txgram/miniapp dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "bot:setup": "pnpm --filter @txgram/scripts bot:setup",
+    "worker:dev": "wrangler dev",
+    "worker:check": "wrangler deploy --dry-run"
+  },
+  "devDependencies": {
+    "wrangler": "^4.152.0"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

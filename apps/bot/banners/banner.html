@@ -1,0 +1,74 @@
+<!doctype html>
+<!-- Bot card artwork. Render with `pnpm --filter @txgram/bot banners` (headless Chrome). Query: ?page=<page>. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet" />
+<style>
+  :root { --bg: #f4f6f8; --card: #fff; --ink: #191f28; --ink-2: #4e5968; --ink-3: #8b95a1; --line: #eef1f4; --skel: #e9edf1; --brand: #16a34a; --brand-soft: #e8f7ee; --up: #f04452; --down: #3182f6; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1200px; height: 600px; overflow: hidden; }
+  body { position: relative; background: linear-gradient(135deg, #ffffff 0%, var(--bg) 100%); font-family: Pretendard, -apple-system, sans-serif; color: var(--ink); }
+  .brand { position: absolute; left: 72px; top: 64px; display: flex; align-items: center; gap: 14px; font-size: 30px; font-weight: 700; letter-spacing: -.02em; }
+  .brand svg { width: 48px; height: 48px; }
+  .copy { position: absolute; left: 72px; bottom: 80px; width: 540px; }
+  .eyebrow { display: inline-block; padding: 8px 16px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); font-size: 20px; font-weight: 700; margin-bottom: 22px; }
+  h1 { font-size: 62px; line-height: 1.18; font-weight: 800; letter-spacing: -.035em; white-space: pre-line; }
+  p { margin-top: 18px; font-size: 26px; line-height: 1.4; color: var(--ink-2); font-weight: 500; }
+  .card { position: absolute; right: 72px; top: 72px; width: 440px; height: 456px; border-radius: 32px; background: var(--card); box-shadow: 0 1px 2px rgba(0, 27, 55, .06), 0 24px 56px rgba(0, 27, 55, .10); padding: 32px; overflow: hidden; }
+  .title { font-size: 22px; font-weight: 700; color: var(--ink-2); margin-bottom: 14px; }
+  .row { display: flex; align-items: center; gap: 16px; height: 66px; border-bottom: 1px solid var(--line); font-size: 24px; font-weight: 700; }
+  .row:last-child { border-bottom: 0; }
+  .row .grow { flex: 1; }
+  .skel { height: 16px; border-radius: 8px; background: var(--skel); }
+  .icon { flex: none; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 16px; background: var(--brand-soft); color: var(--brand); font-size: 24px; font-weight: 800; }
+  .up { color: var(--up); } .down { color: var(--down); }
+  .muted { color: var(--ink-3); font-weight: 500; }
+  .note { margin-top: 18px; padding: 16px 18px; border-radius: 16px; background: #f2f4f6; color: var(--ink-2); font-size: 19px; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="brand">
+  <svg viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#080d00"/><path d="M14 22h22l-8 8h-14z" fill="#8df885"/><path d="M28 34h22l-8 8H20z" fill="#8df885" opacity=".55"/></svg>
+  <div>txgram</div>
+</div>
+<div class="copy"><div class="eyebrow" id="eyebrow"></div><h1 id="title"></h1><p id="subtitle"></p></div>
+<div class="card" id="art"></div>
+<script>
+  const page = new URLSearchParams(location.search).get("page") || "home";
+  const text = {
+    home: ["Official txgram guide bot", "Start trading\nin Telegram", "Markets and funding help, one tap away"],
+    markets: ["Popular markets", "Most traded\nmarkets", "Ranked by 24h volume"],
+    portfolio: ["Portfolio", "Your account\nat a glance", "Balance, positions and orders live in the app"],
+    funds: ["Deposit & Withdraw", "Moving USDC\nin and out", "Networks, fees and transfer status"],
+    guide: ["Getting started", "Ready in\nfour steps", "From connecting a wallet to your first order"],
+    help: ["Help", "How can\nwe help?", "Commands and safety tips"],
+    art: { market: "BTC perpetual", markets: "Popular markets", total: "Total balance", deposit: "Deposit", withdraw: "Withdraw",
+      status: "Track every transfer in Activity", info: ["Minimum", "Fee", "Estimated time"],
+      steps: ["Connect wallet", "Add USDC", "Enable trading", "Review & submit"], cmds: [["/markets", "Market prices"], ["/portfolio", "Your account"], ["/funds", "Deposit & withdraw"], ["/guide", "Getting started"]],
+      safe: "🔒 We never ask for your keys or recovery phrase", app: "Positions · Orders · Activity" },
+  };
+  const [eyebrow, title, subtitle] = text[page];
+  document.getElementById("eyebrow").textContent = eyebrow;
+  document.getElementById("title").textContent = title;
+  document.getElementById("subtitle").textContent = subtitle;
+
+  function line(width, height, fill) {
+    const points = Array.from({ length: 28 }, (_, i) => [i * (width / 27), height * 0.72 - i * (height * 0.018) - Math.sin(i * 0.8) * height * 0.08 - Math.sin(i * 0.31) * height * 0.06]);
+    const path = points.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+    return `<svg width="${width}" height="${height}"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#16a34a" stop-opacity=".18"/><stop offset="1" stop-color="#16a34a" stop-opacity="0"/></linearGradient></defs>${fill ? `<polygon points="0,${height} ${path} ${width},${height}" fill="url(#g)"/>` : ""}<polyline points="${path}" fill="none" stroke="#16a34a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+  }
+  const a = text.art;
+  const art = {
+    home: `<div class="title">${a.market}</div><div class="skel" style="width:62%;height:40px;border-radius:12px"></div><div class="skel" style="width:30%;margin-top:14px"></div><div style="margin:34px -32px 0">${line(440, 230, true)}</div>`,
+    markets: `<div class="title">${a.markets}</div>` + [["BTC", "up"], ["ETH", "up"], ["SOL", "down"], ["HYPE", "up"], ["DOGE", "down"]]
+      .map(([s, d]) => `<div class="row"><span style="width:96px">${s}</span><span class="grow"><span class="skel" style="display:block;width:70%"></span></span><span class="${d}">${d === "up" ? "▲" : "▼"}</span></div>`).join(""),
+    portfolio: `<div class="title">${a.total}</div><div class="skel" style="width:70%;height:44px;border-radius:12px"></div><div class="skel" style="width:36%;margin-top:14px"></div><div style="margin:26px -32px 0">${line(440, 200, true)}</div><div class="row muted" style="border-top:1px solid var(--line);font-size:20px">${a.app}</div>`,
+    funds: `<div class="row"><span class="icon">↓</span><span class="grow">${a.deposit}</span><span class="muted" style="font-size:20px">USDC</span></div><div class="row"><span class="icon">↑</span><span class="grow">${a.withdraw}</span><span class="muted" style="font-size:20px">USDC</span></div>` + a.info.map((label) => `<div class="row" style="font-size:21px"><span class="grow muted">${label}</span><span class="skel" style="width:120px"></span></div>`).join("") + `<div class="note">${a.status}</div>`,
+    guide: a.steps.map((s, i) => `<div class="row" style="height:96px"><span class="icon">${i + 1}</span><span class="grow">${s}</span></div>`).join(""),
+    help: a.cmds.map(([c, t]) => `<div class="row" style="font-size:22px"><span style="width:150px;color:var(--brand)">${c}</span><span class="muted">${t}</span></div>`).join("") + `<div class="note">${a.safe}</div>`,
+  };
+  document.getElementById("art").innerHTML = art[page];
+</script>
+</body>
+</html>

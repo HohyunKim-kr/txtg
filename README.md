@@ -1,9 +1,10 @@
 # txgram
 
 A Telegram perpetuals terminal for TxFlow: live markets, trading, portfolio, USDC deposits and withdrawals. An optional builder address adds a user-approved fee to order flow.
-It runs as a single static SPA with no backend. Design: [docs/architecture.md](docs/architecture.md).
+The mini app is a static SPA; a Cloudflare Worker also provides an English Telegram guide and public-market bot. Design: [docs/architecture.md](docs/architecture.md).
 
 ```
+apps/bot            English Telegram webhook, guide pages and market snapshots
 apps/miniapp        Vite + React mini app (markets, Privy, trading, portfolio, funds)
 packages/txflow     TxFlow client — signing, /info, /exchange, WebSocket
 packages/scripts    Testnet E2E, builder operator CLI
@@ -38,6 +39,8 @@ pnpm --filter @txgram/scripts e2e           # real orders on testnet
 The E2E uses throwaway keys on testnet: faucet → builder approval → agent approval → post-only order/cancel → long/partial close/full close → short/TP-SL/cancel/close → builder accrual → account-signed withdrawal and ledger reservation. Arbitrum settlement is separate from API acceptance; the test does not claim destination-chain completion. Permit deposits have mocked receipt/domain tests and live read-only bridge/domain verification; no real funds are used.
 
 ## Hook it up to Telegram
+
+The English chat bot is implemented with `/start`, `/guide`, `/funds`, `/markets`, `/portfolio` and `/help`, plus Mini App buttons. Portfolio details still open in the app. See [bot setup](docs/telegram-bot-setup.md) for runtime secrets, deployment and webhook registration. Node.js 22+ is required for Wrangler. No bot token is embedded in the SPA.
 
 1. **BotFather**: create a bot with `/newbot` → `/mybots` → Bot Settings → **Configure Mini App**, register the mini app URL → set the **Menu Button** to the same URL.
 2. **Privy dashboard**: create an app → under Login methods enable **Telegram**, enter the bot token / handle, turn on seamless login → also enable **Wallet** login → add the mini app domain to Allowed domains.

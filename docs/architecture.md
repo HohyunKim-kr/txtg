@@ -3,7 +3,7 @@
 A Telegram perpetuals terminal on TxFlow: public markets, trading, portfolio, and native Arbitrum USDC deposits/withdrawals. Orders carry an optional, user-approved builder fee when configured.
 
 - No backend. A static SPA hosted on Cloudflare Workers static assets.
-- The bot is just a shell created in BotFather (Main Mini App + menu button). No bot server.
+- A Cloudflare Worker handles the English Telegram bot webhook alongside the mini-app assets. The first bot version provides guides and public market snapshots; private account linking and notifications are not implemented. BotFather still configures the Main Mini App.
 
 ## 1. Scope
 
@@ -180,3 +180,11 @@ PriceChart uses TradingView Lightweight Charts with up to 500 real candles. Drag
 DepositPanel defaults to the test faucet on testnet and Crypto transfer on mainnet. Its environment-scoped TxRelay networks query accepts only enabled USDC routes whose destination is the protocol USDC collateral address. It sends the wire token symbol and the user's TxFlow address to deposit-address. The QR only appears after a valid address (and memo where required) is returned. Minimum, maximum, fee and ETA come from that route; only the selected network is shown. Connected-wallet permit deposits remain available in a separate tab.
 
 Mainnet network discovery and Solana/Arbitrum address issuance were verified without sending funds. Testnet relay access currently fails with 403/CORS; this never falls back to mainnet. Funded TxRelay deposit credit and final withdrawal settlement remain release checks.
+
+## English Telegram bot
+
+`apps/bot` handles private-chat commands and inline callbacks under `/api/telegram/webhook`, verifying a runtime webhook secret before processing. English photo cards (light artwork from `apps/miniapp/public/bot`, HTML caption, one primary inline button) provide welcome/help/guide/funding information, portfolio links and actual public market snapshots. Callbacks edit the current card with `editMessageMedia`. `/api/telegram/health` exposes configuration readiness without secrets. All other non-API requests delegate to `ASSETS`; Worker-first routing applies only to `/api/*`.
+
+Telegram and market calls have bounded timeouts. Market snapshots have a 30-second per-network cache and show their UTC timestamp. Immediate duplicate update IDs are suppressed in one isolate for five minutes, with a 500-entry bound; this is not durable exactly-once delivery. Responses use Telegram's webhook response-method feature, whose delivery result is not available to the Worker.
+
+The bot stores no wallet keys or account links. Mini-app launch parameters can choose Home, Trade with a valid positive asset ID, or Portfolio, and never initiate an order or withdrawal. `packages/scripts/src/telegram-setup.ts` previews profile/command/menu/webhook configuration by default. `--apply` requires server secrets, configured Worker health and explicit replacement if an unrelated webhook already exists. See [setup](telegram-bot-setup.md).
